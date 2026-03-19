@@ -17,8 +17,8 @@ services:
     volumes:
       # Mount source code so changes are reflected without rebuilding
       - .:/var/www/html
-      # Named volume prevents host directory from shadowing image-built vendor
       - vendor_data:/var/www/html/vendor
+      - bootstrap_cache_data:/var/www/html/bootstrap/cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -27,9 +27,6 @@ services:
     networks:
       - app-network
 
-  # ---------------------------------------------------------------------------
-  # Nginx — reverse proxy / static asset server
-  # ---------------------------------------------------------------------------
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
@@ -87,9 +84,6 @@ services:
     networks:
       - app-network
 
-  # ---------------------------------------------------------------------------
-  # Queue worker — processes jobs from the database queue
-  # ---------------------------------------------------------------------------
   queue:
     build:
       context: .
@@ -104,6 +98,7 @@ services:
     volumes:
       - .:/var/www/html
       - vendor_data:/var/www/html/vendor
+      - bootstrap_cache_data:/var/www/html/bootstrap/cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -112,9 +107,6 @@ services:
     networks:
       - app-network
 
-  # ---------------------------------------------------------------------------
-  # Scheduler — runs php artisan schedule:run every minute
-  # ---------------------------------------------------------------------------
   scheduler:
     build:
       context: .
@@ -129,6 +121,7 @@ services:
     volumes:
       - .:/var/www/html
       - vendor_data:/var/www/html/vendor
+      - bootstrap_cache_data:/var/www/html/bootstrap/cache
     depends_on:
       postgres:
         condition: service_healthy
@@ -146,6 +139,8 @@ volumes:
   redis_data:
     driver: local
   vendor_data:
+    driver: local
+  bootstrap_cache_data:
     driver: local
 
 # -----------------------------------------------------------------------------

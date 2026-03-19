@@ -13,7 +13,9 @@ echo "[entrypoint] Environment: ${APP_ENV:-local}"
 # ---------------------------------------------------------------------------
 if [ ! -f "vendor/autoload.php" ]; then
     echo "[entrypoint] vendor/ missing — running composer install ..."
-    composer install --no-interaction --prefer-dist --optimize-autoloader
+    # Keep container installs aligned with Dockerfile:
+    # avoid running Composer scripts (e.g. boost:update) that may not exist in containers.
+    composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts
 fi
 
 # ---------------------------------------------------------------------------
