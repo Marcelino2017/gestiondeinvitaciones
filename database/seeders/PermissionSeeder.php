@@ -13,10 +13,18 @@ class PermissionSeeder extends Seeder
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $permissions = [
-            'create',
-            'show',
-            'update',
-            'delete',
+            'users.create',
+            'users.show',
+            'users.update',
+            'users.delete',
+            'organizations.create',
+            'organizations.show',
+            'organizations.update',
+            'organizations.delete',
+            'invitations.create',
+            'invitations.show',
+            'invitations.update',
+            'invitations.delete',
         ];
 
         foreach ($permissions as $permission) {

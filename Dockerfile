@@ -58,6 +58,10 @@ RUN apk add --no-cache \
     && apk del .build-deps \
     && rm -rf /tmp/pear
 
+# Composer CLI: el entrypoint ejecuta `composer install` cuando el volumen vendor está vacío u obsoleto.
+# La imagen php-fpm no incluye Composer; sin esto el contenedor falla con "composer: not found".
+COPY --from=composer:2.8 /usr/bin/composer /usr/local/bin/composer
+
 # Copy custom PHP configuration
 COPY docker/php/php.ini $PHP_INI_DIR/conf.d/app.ini
 

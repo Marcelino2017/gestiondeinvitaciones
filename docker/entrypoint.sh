@@ -9,10 +9,23 @@ echo "[entrypoint] Environment: ${APP_ENV:-local}"
 
 # ---------------------------------------------------------------------------
 # In development the vendor directory is a named volume.
-# Install dependencies when the volume is empty (first run).
+# Install dependencies when the volume is empty OR composer.lock changed.
+# Otherwise the volume can keep an old vendor/ (e.g. before laravel/sanctum)
+# and the app crashes on boot with "Class Laravel\Sanctum\Sanctum not found".
 # ---------------------------------------------------------------------------
+run_composer_install=false
 if [ ! -f "vendor/autoload.php" ]; then
-    echo "[entrypoint] vendor/ missing — running composer install ..."
+    run_composer_install=true
+elif [ ! -f "vendor/composer/installed.json" ]; then
+    run_composer_install=true
+elif [ -f "composer.lock" ] && [ "composer.lock" -nt "vendor/composer/installed.json" ]; then
+    run_composer_install=true
+elif [ ! -d "vendor/laravel/sanctum" ]; then
+    run_composer_install=true
+fi
+
+if [ "$run_composer_install" = true ]; then
+    echo "[entrypoint] vendor/ missing or outdated — running composer install ..."
     # Keep container installs aligned with Dockerfile:
     # avoid running Composer scripts (e.g. boost:update) that may not exist in containers.
     composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts

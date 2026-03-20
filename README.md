@@ -1,128 +1,174 @@
-# Gestion de Invitaciones - Guia de configuracion y Docker
+# Gestion de Invitaciones API
 
-Proyecto Laravel 13 con PostgreSQL, Redis, Nginx, workers de cola y scheduler ejecutados con Docker Compose.
+API REST en Laravel 13 para gestionar usuarios, organizaciones y flujo de invitaciones por token.
 
-## Requisitos
+## Stack
 
-- Docker Desktop (con Docker Compose v2)
-- Git
+- Laravel 13
+- PostgreSQL
+- Redis
+- Sanctum (autenticacion por token)
+- Spatie Permission (roles y permisos)
+- Docker Compose (app, nginx, postgres, redis, queue, scheduler)
 
-## 1) Configuracion inicial del proyecto
+## Puesta en marcha (Docker)
 
-Desde la raiz del proyecto:
+1. Copiar variables de entorno:
 
 ```bash
-cp .env.example .env
+cp .env.docker .env
 ```
 
-Edita `.env` para que use los servicios de Docker (valores recomendados):
-
-```env
-APP_ENV=local
-APP_DEBUG=true
-APP_URL=http://localhost:8000
-
-DB_CONNECTION=pgsql
-DB_HOST=postgres
-DB_PORT=5432
-DB_DATABASE=gestiondeinvitaciones
-DB_USERNAME=laravel
-DB_PASSWORD=secret
-
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PASSWORD=null
-REDIS_CLIENT=phpredis
-
-QUEUE_CONNECTION=database
-```
-
-Notas:
-
-- El contenedor `app` genera `APP_KEY` automaticamente si esta vacia.
-- El contenedor `app` ejecuta migraciones al iniciar (`RUN_MIGRATIONS=true`).
-- Se crea automaticamente una base de datos de pruebas: `gestiondeinvitaciones_test`.
-
-## 2) Levantar el proyecto con Docker
-
-Construir y arrancar todo:
+2. Levantar contenedores:
 
 ```bash
 docker compose up -d --build
 ```
 
-Ver contenedores:
+3. Ejecutar migraciones y seeders:
 
 ```bash
-docker compose ps
+docker compose exec app php artisan migrate
+docker compose exec app php artisan db:seed
 ```
 
-Aplicacion disponible en:
+4. URL base:
 
 - `http://localhost:8000`
 
-Servicios incluidos:
+## Mailtrap (envio de invitaciones)
 
-- `nginx` (puerto `8000` por defecto)
-- `app` (PHP-FPM Laravel)
-- `postgres` (host `postgres`, puerto interno `5432`, externo `54322`)
-- `redis` (puerto `6379`)
-- `queue` (worker de colas)
-- `scheduler` (tareas programadas)
+Configura en `.env`:
 
-## 3) Comandos utiles dentro de Docker
-
-Abrir shell en app:
-
-```bash
-docker compose exec app sh
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=sandbox.smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=tu_usuario_mailtrap
+MAIL_PASSWORD=tu_password_mailtrap
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS="noreply@gestiondeinvitaciones.com"
+MAIL_FROM_NAME="Gestion de Invitaciones"
 ```
 
-Ejecutar Artisan:
+El endpoint de crear invitacion envia un correo al email invitado con el token.
 
-```bash
-docker compose exec app php artisan list
+## Contrato de respuesta API
+
+Todas las respuestas usan:
+
+```json
+{
+  "success": true,
+  "message": "Texto de negocio",
+  "data": {},
+  "errors": null
+}
 ```
 
-Forzar migraciones:
+En error:
 
-```bash
-docker compose exec app php artisan migrate --force
+```json
+{
+  "success": false,
+  "message": "Descripcion del error",
+  "data": null,
+  "errors": {}
+}
 ```
 
-Ver logs en vivo:
+## Codigos HTTP
+
+- `200` OK
+- `201` Creado
+- `401` No autenticado
+- `403` Sin permisos
+- `404` No encontrado
+- `409` Conflicto de estado (ej. invitacion ya procesada)
+- `422` Error de validacion (FormRequest)
+
+## Roles y permisos
+
+Roles:
+
+- `admin`
+- `manager`
+- `member`
+
+Permisos definidos:
+
+- `users.create`, `users.show`, `users.update`, `users.delete`
+- `organizations.create`, `organizations.show`, `organizations.update`, `organizations.delete`
+- `invitations.create`, `invitations.show`, `invitations.update`, `invitations.delete`
+
+Matriz:
+
+- `admin`: todos los permisos
+- `manager`: lectura de usuarios, gestion operativa de organizaciones/invitaciones
+- `member`: lectura limitada
+
+Seeder admin:
+
+- Email: `admin@gestiondeinvitaciones.com`
+- Password: `Admin12345*`
+
+## Endpoints
+
+### Auth
+
+- `POST /api/auth/register`
+  - body: `name`, `email`, `password`, `password_confirmation`
+- `POST /api/auth/login`
+  - body: `email`, `password`
+- `POST /api/auth/logout` (Bearer token)
+
+### Organizaciones
+
+- `GET /api/organizations` (auth + `permission:organizations.show`)
+- `POST /api/organizations` (auth + `permission:organizations.create`)
+  - body: `name`, `description`
+
+### Invitaciones
+
+- `POST /api/organizations/{organization}/invitations` (auth + `permission:invitations.create`)
+  - body: `email`, `role` (`manager|member`)
+- `GET /api/invitations/{token}`
+- `POST /api/invitations/{token}/accept`
+  - caso usuario autenticado: usa su `user_id` internamente
+  - caso usuario nuevo: enviar `name`, `password`, `password_confirmation`
+
+## Flujo de invitaciones
+
+1. Un usuario autorizado crea invitacion para una organizacion.
+2. Se guarda token unico, rol objetivo, email destino y expiracion.
+3. Se envia correo con token.
+4. El invitado consulta `GET /api/invitations/{token}`.
+5. El invitado acepta con `POST /api/invitations/{token}/accept`.
+6. Si no existe usuario, se crea automaticamente.
+7. Se vincula usuario a organizacion en `user_organization` con el rol invitado.
+8. La invitacion cambia a estado `accepted`.
+
+## Comandos utiles
 
 ```bash
-docker compose logs -f app nginx postgres redis queue scheduler
+docker compose exec app php artisan route:list
+docker compose exec app php artisan config:clear
+docker compose exec app php artisan optimize:clear
+docker compose logs -f app
 ```
 
-## 4) Ejecutar pruebas
+## Capturas Mailtrap
 
-Este proyecto esta preparado para correr tests contra PostgreSQL en la BD `gestiondeinvitaciones_test`.
+Agregar en entrega:
 
-```bash
-docker compose exec app php artisan test
-```
+- captura del inbox mostrando email de invitacion
+- captura del contenido del correo (token/flujo de aceptacion)
 
-## 5) Detener y limpiar
+## Uso de IA (documentacion requerida en entrega)
 
-Detener contenedores:
+Para cumplir la prueba tecnica, incluir en la entrega:
 
-```bash
-docker compose down
-```
-
-Detener y eliminar volumenes (reinicio limpio de BD/cache/vendor):
-
-```bash
-docker compose down -v
-```
-
-## 6) Solucion rapida de problemas
-
-- Si cambia `composer.json` y faltan dependencias:
-  - `docker compose exec app composer install --no-interaction --prefer-dist`
-- Si hay problemas de cache Laravel:
-  - `docker compose exec app php artisan optimize:clear`
-- Si no levanta por variables incorrectas:
-  - revisa `.env` y confirma `DB_HOST=postgres` y `REDIS_HOST=redis`.
+- en que partes se uso IA
+- por que se uso
+- que valor aporto
+- que validaciones o ajustes manuales se hicieron sobre el resultado

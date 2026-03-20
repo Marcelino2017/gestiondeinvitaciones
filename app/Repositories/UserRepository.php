@@ -2,9 +2,10 @@
 
 namespace App\Repositories;
 
+use App\Interfaces\UserRepositoryInterface;
 use App\Models\User;
 
-class UserRepository extends BaseRepository
+class UserRepository extends BaseRepository implements UserRepositoryInterface
 {
     public function __construct(User $model)
     {
@@ -14,5 +15,10 @@ class UserRepository extends BaseRepository
     public function findByEmail(string $email): ?User
     {
         return $this->model->where('email', $email)->first();
+    }
+
+    public function findOrFail(int $id): User
+    {
+        return $this->model->findOrFail($id);
     }
 }
